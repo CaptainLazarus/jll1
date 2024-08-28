@@ -1,0 +1,6 @@
+(executable
+ (public_name patch_analyser)
+ (name main)
+ (modules token lexer patch_parser diff main)
+ (libraries patch_analyser)
+ )

@@ -1,0 +1,248 @@
+From 63bdcaa2d92bf5dba4dab23abb4e2b811e565438 Mon Sep 17 00:00:00 2001
+From: Ralf Jung <post@ralfj.de>
+Date: Wed, 12 Jun 2024 15:19:40 +0200
+Subject: [PATCH 1/2] add is_none_or
+
+---
+ library/core/src/option.rs | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/library/core/src/option.rs b/library/core/src/option.rs
+index e253cfd2822be..d90b9cdb4b5c8 100644
+--- a/library/core/src/option.rs
++++ b/library/core/src/option.rs
+@@ -654,6 +654,32 @@ impl<T> Option<T> {
+         !self.is_some()
+     }
+ 
++    /// Returns `true` if the option is a [`None`] or the value inside of it matches a predicate.
++    ///
++    /// # Examples
++    ///
++    /// ```
++    /// #![feature(is_none_or)]
++    ///
++    /// let x: Option<u32> = Some(2);
++    /// assert_eq!(x.is_none_or(|x| x > 1), true);
++    ///
++    /// let x: Option<u32> = Some(0);
++    /// assert_eq!(x.is_none_or(|x| x > 1), false);
++    ///
++    /// let x: Option<u32> = None;
++    /// assert_eq!(x.is_none_or(|x| x > 1), true);
++    /// ```
++    #[must_use]
++    #[inline]
++    #[unstable(feature = "is_none_or", issue = "none")]
++    pub fn is_none_or(self, f: impl FnOnce(T) -> bool) -> bool {
++        match self {
++            None => true,
++            Some(x) => f(x),
++        }
++    }
++
+     /////////////////////////////////////////////////////////////////////////
+     // Adapter for working with references
+     /////////////////////////////////////////////////////////////////////////
+
+From 4c208ac233df3b57f48298d5a911354fe8189320 Mon Sep 17 00:00:00 2001
+From: Ralf Jung <post@ralfj.de>
+Date: Wed, 12 Jun 2024 15:22:23 +0200
+Subject: [PATCH 2/2] use is_none_or in some places in the compiler
+
+---
+ compiler/rustc_const_eval/src/interpret/eval_context.rs | 2 +-
+ compiler/rustc_const_eval/src/interpret/memory.rs       | 2 +-
+ compiler/rustc_const_eval/src/interpret/projection.rs   | 2 +-
+ compiler/rustc_const_eval/src/lib.rs                    | 1 +
+ compiler/rustc_hir_typeck/src/_match.rs                 | 2 +-
+ compiler/rustc_hir_typeck/src/coercion.rs               | 2 +-
+ compiler/rustc_hir_typeck/src/expr.rs                   | 2 +-
+ compiler/rustc_hir_typeck/src/fn_ctxt/checks.rs         | 2 +-
+ compiler/rustc_hir_typeck/src/fn_ctxt/suggestions.rs    | 4 ++--
+ compiler/rustc_hir_typeck/src/lib.rs                    | 1 +
+ src/tools/miri/src/lib.rs                               | 1 +
+ src/tools/miri/src/shims/foreign_items.rs               | 4 ++--
+ src/tools/rust-analyzer/crates/hir-ty/src/display.rs    | 1 +
+ 13 files changed, 15 insertions(+), 11 deletions(-)
+
+diff --git a/compiler/rustc_const_eval/src/interpret/eval_context.rs b/compiler/rustc_const_eval/src/interpret/eval_context.rs
+index 7c2100fcbe38a..80dc23ce3039e 100644
+--- a/compiler/rustc_const_eval/src/interpret/eval_context.rs
++++ b/compiler/rustc_const_eval/src/interpret/eval_context.rs
+@@ -1057,7 +1057,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
+ 
+                 ty::Str | ty::Slice(_) | ty::Dynamic(_, _, ty::Dyn) | ty::Foreign(..) => false,
+ 
+-                ty::Tuple(tys) => tys.last().iter().all(|ty| is_very_trivially_sized(**ty)),
++                ty::Tuple(tys) => tys.last().is_none_or(|ty| is_very_trivially_sized(*ty)),
+ 
+                 ty::Pat(ty, ..) => is_very_trivially_sized(*ty),
+ 
+diff --git a/compiler/rustc_const_eval/src/interpret/memory.rs b/compiler/rustc_const_eval/src/interpret/memory.rs
+index 7eb73e9b52f68..5d14e8fb5a428 100644
+--- a/compiler/rustc_const_eval/src/interpret/memory.rs
++++ b/compiler/rustc_const_eval/src/interpret/memory.rs
+@@ -446,7 +446,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
+                 let (alloc_size, _alloc_align, ret_val) = alloc_size(alloc_id, offset, prov)?;
+                 // Test bounds.
+                 // It is sufficient to check this for the end pointer. Also check for overflow!
+-                if offset.checked_add(size, &self.tcx).map_or(true, |end| end > alloc_size) {
++                if offset.checked_add(size, &self.tcx).is_none_or(|end| end > alloc_size) {
+                     throw_ub!(PointerOutOfBounds {
+                         alloc_id,
+                         alloc_size,
+diff --git a/compiler/rustc_const_eval/src/interpret/projection.rs b/compiler/rustc_const_eval/src/interpret/projection.rs
+index 09e1a59dfa1a7..efa01b5434260 100644
+--- a/compiler/rustc_const_eval/src/interpret/projection.rs
++++ b/compiler/rustc_const_eval/src/interpret/projection.rs
+@@ -300,7 +300,7 @@ where
+     ) -> InterpResult<'tcx, P> {
+         let len = base.len(self)?; // also asserts that we have a type where this makes sense
+         let actual_to = if from_end {
+-            if from.checked_add(to).map_or(true, |to| to > len) {
++            if from.checked_add(to).is_none_or(|to| to > len) {
+                 // This can only be reached in ConstProp and non-rustc-MIR.
+                 throw_ub!(BoundsCheckFailed { len: len, index: from.saturating_add(to) });
+             }
+diff --git a/compiler/rustc_const_eval/src/lib.rs b/compiler/rustc_const_eval/src/lib.rs
+index 45ea3ec08f8f4..50a4d0612ccd3 100644
+--- a/compiler/rustc_const_eval/src/lib.rs
++++ b/compiler/rustc_const_eval/src/lib.rs
+@@ -6,6 +6,7 @@
+ #![feature(box_patterns)]
+ #![feature(decl_macro)]
+ #![feature(if_let_guard)]
++#![feature(is_none_or)]
+ #![feature(let_chains)]
+ #![feature(never_type)]
+ #![feature(rustdoc_internals)]
+diff --git a/compiler/rustc_hir_typeck/src/_match.rs b/compiler/rustc_hir_typeck/src/_match.rs
+index a599e8d05fd3c..281af80bff577 100644
+--- a/compiler/rustc_hir_typeck/src/_match.rs
++++ b/compiler/rustc_hir_typeck/src/_match.rs
+@@ -234,7 +234,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
+                 let ret_ty = ret_coercion.borrow().expected_ty();
+                 let ret_ty = self.infcx.shallow_resolve(ret_ty);
+                 self.can_coerce(arm_ty, ret_ty)
+-                    && prior_arm.map_or(true, |(_, ty, _)| self.can_coerce(ty, ret_ty))
++                    && prior_arm.is_none_or(|(_, ty, _)| self.can_coerce(ty, ret_ty))
+                     // The match arms need to unify for the case of `impl Trait`.
+                     && !matches!(ret_ty.kind(), ty::Alias(ty::Opaque, ..))
+             }
+diff --git a/compiler/rustc_hir_typeck/src/coercion.rs b/compiler/rustc_hir_typeck/src/coercion.rs
+index e54a07786cd1d..fcd22b746769c 100644
+--- a/compiler/rustc_hir_typeck/src/coercion.rs
++++ b/compiler/rustc_hir_typeck/src/coercion.rs
+@@ -913,7 +913,7 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
+                 if self
+                     .tcx
+                     .upvars_mentioned(closure_def_id_a.expect_local())
+-                    .map_or(true, |u| u.is_empty()) =>
++                    .is_none_or(|u| u.is_empty()) =>
+             {
+                 // We coerce the closure, which has fn type
+                 //     `extern "rust-call" fn((arg0,arg1,...)) -> _`
+diff --git a/compiler/rustc_hir_typeck/src/expr.rs b/compiler/rustc_hir_typeck/src/expr.rs
+index 5b27ebe3416ae..3a27fce8146a6 100644
+--- a/compiler/rustc_hir_typeck/src/expr.rs
++++ b/compiler/rustc_hir_typeck/src/expr.rs
+@@ -1560,7 +1560,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
+ 
+         // If the length is 0, we don't create any elements, so we don't copy any. If the length is 1, we
+         // don't copy that one element, we move it. Only check for Copy if the length is larger.
+-        if count.try_eval_target_usize(tcx, self.param_env).map_or(true, |len| len > 1) {
++        if count.try_eval_target_usize(tcx, self.param_env).is_none_or(|len| len > 1) {
+             let lang_item = self.tcx.require_lang_item(LangItem::Copy, None);
+             let code = traits::ObligationCauseCode::RepeatElementCopy {
+                 is_constable,
+diff --git a/compiler/rustc_hir_typeck/src/fn_ctxt/checks.rs b/compiler/rustc_hir_typeck/src/fn_ctxt/checks.rs
+index b8333d4749378..1cd5e784e199c 100644
+--- a/compiler/rustc_hir_typeck/src/fn_ctxt/checks.rs
++++ b/compiler/rustc_hir_typeck/src/fn_ctxt/checks.rs
+@@ -2240,7 +2240,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
+             for (idx, (generic_param, param)) in
+                 params_with_generics.iter().enumerate().filter(|(idx, _)| {
+                     check_for_matched_generics
+-                        || expected_idx.map_or(true, |expected_idx| expected_idx == *idx)
++                        || expected_idx.is_none_or(|expected_idx| expected_idx == *idx)
+                 })
+             {
+                 let Some(generic_param) = generic_param else {
+diff --git a/compiler/rustc_hir_typeck/src/fn_ctxt/suggestions.rs b/compiler/rustc_hir_typeck/src/fn_ctxt/suggestions.rs
+index 9ab89f3444c9c..8a88e5a6ff489 100644
+--- a/compiler/rustc_hir_typeck/src/fn_ctxt/suggestions.rs
++++ b/compiler/rustc_hir_typeck/src/fn_ctxt/suggestions.rs
+@@ -440,7 +440,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
+             };
+             // Given `Result<_, E>`, check our expected ty is `Result<_, &E>` for
+             // `as_ref` and `as_deref` compatibility.
+-            let error_tys_equate_as_ref = error_tys.map_or(true, |(found, expected)| {
++            let error_tys_equate_as_ref = error_tys.is_none_or(|(found, expected)| {
+                 self.can_eq(
+                     self.param_env,
+                     Ty::new_imm_ref(self.tcx, self.tcx.lifetimes.re_erased, found),
+@@ -492,7 +492,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
+                 && Some(adt.did()) == self.tcx.lang_items().string()
+                 && peeled.is_str()
+                 // `Result::map`, conversely, does not take ref of the error type.
+-                && error_tys.map_or(true, |(found, expected)| {
++                && error_tys.is_none_or(|(found, expected)| {
+                     self.can_eq(self.param_env, found, expected)
+                 })
+             {
+diff --git a/compiler/rustc_hir_typeck/src/lib.rs b/compiler/rustc_hir_typeck/src/lib.rs
+index b0fd6de349680..a87ee7b455488 100644
+--- a/compiler/rustc_hir_typeck/src/lib.rs
++++ b/compiler/rustc_hir_typeck/src/lib.rs
+@@ -4,6 +4,7 @@
+ #![feature(box_patterns)]
+ #![feature(control_flow_enum)]
+ #![feature(if_let_guard)]
++#![feature(is_none_or)]
+ #![feature(let_chains)]
+ #![feature(never_type)]
+ #![feature(try_blocks)]
+diff --git a/src/tools/miri/src/lib.rs b/src/tools/miri/src/lib.rs
+index 11cbbde06aa08..f8410db4dd0f9 100644
+--- a/src/tools/miri/src/lib.rs
++++ b/src/tools/miri/src/lib.rs
+@@ -13,6 +13,7 @@
+ #![feature(lint_reasons)]
+ #![feature(trait_upcasting)]
+ #![feature(strict_overflow_ops)]
++#![feature(is_none_or)]
+ // Configure clippy and other lints
+ #![allow(
+     clippy::collapsible_else_if,
+diff --git a/src/tools/miri/src/shims/foreign_items.rs b/src/tools/miri/src/shims/foreign_items.rs
+index 898fc111fd43f..911958e558c5a 100644
+--- a/src/tools/miri/src/shims/foreign_items.rs
++++ b/src/tools/miri/src/shims/foreign_items.rs
+@@ -396,12 +396,12 @@ trait EvalContextExtPriv<'tcx>: crate::MiriInterpCxExt<'tcx> {
+                     // If the newly promised alignment is bigger than the native alignment of this
+                     // allocation, and bigger than the previously promised alignment, then set it.
+                     if align > alloc_align
+-                        && !this
++                        && this
+                             .machine
+                             .symbolic_alignment
+                             .get_mut()
+                             .get(&alloc_id)
+-                            .is_some_and(|&(_, old_align)| align <= old_align)
++                            .is_none_or(|&(_, old_align)| align > old_align)
+                     {
+                         this.machine.symbolic_alignment.get_mut().insert(alloc_id, (offset, align));
+                     }
+diff --git a/src/tools/rust-analyzer/crates/hir-ty/src/display.rs b/src/tools/rust-analyzer/crates/hir-ty/src/display.rs
+index 5a9621bb69a47..241690d00896d 100644
+--- a/src/tools/rust-analyzer/crates/hir-ty/src/display.rs
++++ b/src/tools/rust-analyzer/crates/hir-ty/src/display.rs
+@@ -1387,6 +1387,7 @@ fn generic_args_sans_defaults<'ga>(
+                     }
+                     // otherwise, if the arg is equal to the param default, hide it (unless the
+                     // default is an error which can happen for the trait Self type)
++                    #[allow(unstable_name_collisions)]
+                     default_parameters.get(i).is_none_or(|default_parameter| {
+                         // !is_err(default_parameter.skip_binders())
+                         //     &&
