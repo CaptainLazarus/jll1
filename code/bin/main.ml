@@ -1,11 +1,4 @@
-open Diff
 open Patch_parser
-
-let read_patch_file (file_path: string) : string =
-  let ic = open_in file_path in
-  let content = really_input_string ic (in_channel_length ic) in
-  close_in ic;
-  content
 
 (* let reduce_to_minimal_expression (changes: string list) : string list = *)
 (*   changes *)
@@ -23,7 +16,7 @@ let analyse_patch (file_path: string) =
 
   let changes = preprocess_patch patch_content in
   print_endline "\nProcessed Changes with Context:";
-  List.iter print_diff changes
+  List.iter Diff.print_diff changes
 
   (* let minimal_changes = reduce_to_minimal_expression changes in *)
   (* print_endline "\nMinimal Changes:"; *)

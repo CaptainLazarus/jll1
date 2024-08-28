@@ -1,4 +1,6 @@
 (library
- (name patch_analyser)
- ; (modules token lexer)
- )
+(name patch_parser)
+(public_name patch_analyser.patch_parser)
+(libraries base)
+(modules diff patch_parser)
+)

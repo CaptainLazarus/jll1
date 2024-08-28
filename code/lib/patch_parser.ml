@@ -1,5 +1,13 @@
 open Diff
 
+(* IO funcs *)
+let read_patch_file (file_path: string) : string =
+  let ic = open_in file_path in
+  let content = really_input_string ic (in_channel_length ic) in
+  close_in ic;
+  content
+
+(* Parser funcs *)
 let split_lines (s: string) : string list = String.split_on_char '\n' s
 
 let extract_line_number line =
@@ -71,3 +79,5 @@ let extract_diffs (lines: string list) : diff list =
 
 let preprocess_patch (context: string) : diff list =
   extract_diffs (split_lines context)
+
+module Diff = Diff
