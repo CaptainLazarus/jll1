@@ -2,7 +2,7 @@
 opam-version: "2.0"
 synopsis: "A short synopsis"
 description: "A longer description"
-maintainer: ["Maintainer Name"]
+maintainer: ["CaptainLazarus"]
 authors: ["Author Name"]
 license: "LICENSE"
 tags: ["topics" "to describe" "your" "project"]
@@ -12,6 +12,7 @@ bug-reports: "https://github.com/username/reponame/issues"
 depends: [
   "ocaml"
   "dune" {>= "3.16"}
+  "alcotest" {with-test}
   "odoc" {with-doc}
 ]
 build: [

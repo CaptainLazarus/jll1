@@ -1,5 +1,5 @@
-open Patch_parser
 open Diff
+open Patch_parser
 
 let read_patch_file (file_path: string) : string =
   let ic = open_in file_path in
@@ -18,12 +18,12 @@ let read_patch_file (file_path: string) : string =
 
 let analyse_patch (file_path: string) =
   let patch_content = read_patch_file file_path in
-  (print_endline "Original Patch Content:";
+  print_endline "Original Patch Content:";
   (* print_endline patch_content; *)
 
   let changes = preprocess_patch patch_content in
   print_endline "\nProcessed Changes with Context:";
-  List.iter print_diff changes : unit)
+  List.iter print_diff changes
 
   (* let minimal_changes = reduce_to_minimal_expression changes in *)
   (* print_endline "\nMinimal Changes:"; *)

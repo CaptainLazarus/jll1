@@ -18,7 +18,7 @@ let create_diff
 
 let print_diff p =
   Printf.printf
-    "---dif\n\nFileName: %s\nLineNo: %d\nBeforeContext: %s\nAfterContext: %s\nAddedLines: %s\nRemovedLines: %s\n\n---dif\n"
+    "\n\n\n---dif\n\nFileName: %s\nLineNo: %d\nBeforeContext: %s\nAfterContext: %s\nAddedLines: %s\nRemovedLines: %s\n\n---dif\n\n\n"
     p.file_name
     p.line_no
     p.before_context
