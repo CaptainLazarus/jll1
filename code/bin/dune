@@ -1,5 +1,5 @@
 (executable
  (public_name patch_analyser)
  (name main)
- (libraries patch_parser)
+ (libraries patch_processor)
  )

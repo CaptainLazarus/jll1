@@ -1,6 +1,5 @@
 (library
-(name patch_parser)
-(public_name patch_analyser.patch_parser)
+(name patch_processor)
+(public_name patch_analyser.patch_processor)
 (libraries base)
-(modules diff patch_parser)
 )

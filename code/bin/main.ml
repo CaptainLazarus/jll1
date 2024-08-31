@@ -1,4 +1,4 @@
-open Patch_parser
+open Patch_processor
 
 (* let reduce_to_minimal_expression (changes: string list) : string list = *)
 (*   changes *)
@@ -10,11 +10,10 @@ open Patch_parser
 (*   List.iter print_endline changes *)
 
 let analyse_patch (file_path: string) =
-  let patch_content = read_patch_file file_path in
+  let patch_content = Preprocess.read_patch_file file_path in
   print_endline "Original Patch Content:";
-  (* print_endline patch_content; *)
 
-  let changes = preprocess_patch patch_content in
+  let changes = Preprocess.preprocess_patch patch_content in
   print_endline "\nProcessed Changes with Context:";
   List.iter Diff.print_diff changes
 

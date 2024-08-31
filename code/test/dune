@@ -1,3 +1,8 @@
+(copy_files patches/*.patch)
 (test
-(libraries alcotest)
-(name test_patch_analyser))
+  (name all_tests)
+  (libraries alcotest patch_processor)
+  (modules test_preprocess all_tests)
+  (deps (glob_files patches/*.patch))
+  )
+
