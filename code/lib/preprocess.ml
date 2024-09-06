@@ -63,12 +63,12 @@ let extract_diffs (lines: string list) : diff list =
                (match current_diff with
                  | Some d -> aux ([d] @ acc) None "" 0 [] remaining
                  | None -> aux acc None "" 0 [] remaining)
-            | 'd' when String.length line > 4 && String.sub line 0 4 = "diff" ->
+            | 'd' when String.length line > 4 && String.sub line 0 4 = "diff" -> (*Deleted + Added files have dev/null. Skip till next diff*)
                let filename_with_prefix = List.rev (String.split_on_char ' ' line) |> List.hd in
                let file_name =
                  if String.starts_with ~prefix:"b/" filename_with_prefix then
                    String.sub filename_with_prefix 2 (String.length filename_with_prefix - 2)
-                 else
+                else
                    filename_with_prefix
                in
                let new_diff  = Some {
@@ -82,7 +82,6 @@ let extract_diffs (lines: string list) : diff list =
                aux (Option.to_list current_diff @ acc) new_diff file_name 0 [] rest
             | '@' ->
                let new_line_no = extract_line_number line in
-               print_endline (string_of_int new_line_no);
                let updated_diff = match current_diff with
                  | Some d -> Some {d with line_no=new_line_no}
                  | None -> failwith "wtf" in (*Is there a point to optional diff ? It'll always have to be present anyway*)
@@ -93,8 +92,8 @@ let extract_diffs (lines: string list) : diff list =
                let updated_diff = match current_diff with
                  | Some d when d.file_name = file_name ->
                     Some { d with
-                        added_lines = if d.added_lines <> "" then d.added_lines ^ "\n" ^ added_content else added_content;
-                        before_context = String.concat "\n" context ^ "\n"}
+                        added_lines = if d.added_lines <> "" then d.added_lines ^ "\n" ^ added_content else added_content; (*Computationally expensive*)
+                        before_context = if d.before_context <> "" then d.before_context else String.concat "\n" context ^ "\n"} (*Problem here. Multiple changes grouped together from a single diff, even if the changes are wildly different. Need to fix this. Same as the '-' match arm*)
                  | _ ->
                     failwith "How'd you get here?"
                in
@@ -106,7 +105,7 @@ let extract_diffs (lines: string list) : diff list =
                  | Some d when d.file_name = file_name ->
                     Some { d with 
                         removed_lines = d.removed_lines ^ removed_content;
-                        before_context = String.concat "\n" context ^ "\n"}
+                        before_context = if d.before_context <> "" then d.before_context else String.concat "\n" context ^ "\n"}
                  | _ ->
                     failwith "How'd you get here?"
                in
