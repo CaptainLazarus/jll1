@@ -1,0 +1,107 @@
+From 63bdcaa2d92bf5dba4dab23abb4e2b811e565438 Mon Sep 17 00:00:00 2001
+From: Ralf Jung <post@ralfj.de>
+Date: Wed, 12 Jun 2024 15:19:40 +0200
+Subject: [PATCH 1/2] add is_none_or
+
+---
+ library/core/src/option.rs | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/library/core/src/option.rs b/library/core/src/option.rs
+index e253cfd2822be..d90b9cdb4b5c8 100644
+--- a/library/core/src/option.rs
++++ b/library/core/src/option.rs
+@@ -654,6 +654,32 @@ impl<T> Option<T> {
+         !self.is_some()
+     }
+ 
++    /// Returns `true` if the option is a [`None`] or the value inside of it matches a predicate.
++    ///
++    /// # Examples
++    ///
++    /// ```
++    /// #![feature(is_none_or)]
++    ///
++    /// let x: Option<u32> = Some(2);
++    /// assert_eq!(x.is_none_or(|x| x > 1), true);
++    ///
++    /// let x: Option<u32> = Some(0);
++    /// assert_eq!(x.is_none_or(|x| x > 1), false);
++    ///
++    /// let x: Option<u32> = None;
++    /// assert_eq!(x.is_none_or(|x| x > 1), true);
++    /// ```
++    #[must_use]
++    #[inline]
++    #[unstable(feature = "is_none_or", issue = "none")]
++    pub fn is_none_or(self, f: impl FnOnce(T) -> bool) -> bool {
++        match self {
++            None => true,
++            Some(x) => f(x),
++        }
++    }
++
+     /////////////////////////////////////////////////////////////////////////
+     // Adapter for working with references
+     /////////////////////////////////////////////////////////////////////////
+
+From 4c208ac233df3b57f48298d5a911354fe8189320 Mon Sep 17 00:00:00 2001
+From: Ralf Jung <post@ralfj.de>
+Date: Wed, 12 Jun 2024 15:22:23 +0200
+Subject: [PATCH 2/2] use is_none_or in some places in the compiler
+
+---
+ compiler/rustc_const_eval/src/interpret/eval_context.rs | 2 +-
+ compiler/rustc_const_eval/src/interpret/memory.rs       | 2 +-
+ compiler/rustc_const_eval/src/interpret/projection.rs   | 2 +-
+ compiler/rustc_const_eval/src/lib.rs                    | 1 +
+ compiler/rustc_hir_typeck/src/_match.rs                 | 2 +-
+ compiler/rustc_hir_typeck/src/coercion.rs               | 2 +-
+ compiler/rustc_hir_typeck/src/expr.rs                   | 2 +-
+ compiler/rustc_hir_typeck/src/fn_ctxt/checks.rs         | 2 +-
+ compiler/rustc_hir_typeck/src/fn_ctxt/suggestions.rs    | 4 ++--
+ compiler/rustc_hir_typeck/src/lib.rs                    | 1 +
+ src/tools/miri/src/lib.rs                               | 1 +
+ src/tools/miri/src/shims/foreign_items.rs               | 4 ++--
+ src/tools/rust-analyzer/crates/hir-ty/src/display.rs    | 1 +
+ 13 files changed, 15 insertions(+), 11 deletions(-)
+
+diff --git a/compiler/rustc_const_eval/src/interpret/eval_context.rs b/compiler/rustc_const_eval/src/interpret/eval_context.rs
+index 7c2100fcbe38a..80dc23ce3039e 100644
+--- a/compiler/rustc_const_eval/src/interpret/eval_context.rs
++++ b/compiler/rustc_const_eval/src/interpret/eval_context.rs
+@@ -1057,7 +1057,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
+ 
+                 ty::Str | ty::Slice(_) | ty::Dynamic(_, _, ty::Dyn) | ty::Foreign(..) => false,
+ 
+-                ty::Tuple(tys) => tys.last().iter().all(|ty| is_very_trivially_sized(**ty)),
++                ty::Tuple(tys) => tys.last().is_none_or(|ty| is_very_trivially_sized(*ty)),
+ 
+                 ty::Pat(ty, ..) => is_very_trivially_sized(*ty),
+ 
+diff --git a/compiler/rustc_const_eval/src/interpret/memory.rs b/compiler/rustc_const_eval/src/interpret/memory.rs
+index 7eb73e9b52f68..5d14e8fb5a428 100644
+--- a/compiler/rustc_const_eval/src/interpret/memory.rs
++++ b/compiler/rustc_const_eval/src/interpret/memory.rs
+@@ -446,7 +446,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
+                 let (alloc_size, _alloc_align, ret_val) = alloc_size(alloc_id, offset, prov)?;
+                 // Test bounds.
+                 // It is sufficient to check this for the end pointer. Also check for overflow!
+-                if offset.checked_add(size, &self.tcx).map_or(true, |end| end > alloc_size) {
++                if offset.checked_add(size, &self.tcx).is_none_or(|end| end > alloc_size) {
+                     throw_ub!(PointerOutOfBounds {
+                         alloc_id,
+                         alloc_size,
+diff --git a/compiler/rustc_const_eval/src/interpret/projection.rs b/compiler/rustc_const_eval/src/interpret/projection.rs
+index 09e1a59dfa1a7..efa01b5434260 100644
+--- a/compiler/rustc_const_eval/src/interpret/projection.rs
++++ b/compiler/rustc_const_eval/src/interpret/projection.rs
+@@ -300,7 +300,7 @@ where
+     ) -> InterpResult<'tcx, P> {
+         let len = base.len(self)?; // also asserts that we have a type where this makes sense
+         let actual_to = if from_end {
+-            if from.checked_add(to).map_or(true, |to| to > len) {
++            if from.checked_add(to).is_none_or(|to| to > len) {
+                 // This can only be reached in ConstProp and non-rustc-MIR.
+                 throw_ub!(BoundsCheckFailed { len: len, index: from.saturating_add(to) });
+             }

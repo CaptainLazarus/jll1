@@ -1,124 +1,94 @@
 open Diff
+open Exceptions
+open Preprocess_util
 
 let read_patch_file (file_path: string) : string =
+  if String.length file_path = 0 then raise Empty_path;
   let ic = open_in file_path in
   let content = really_input_string ic (in_channel_length ic) in
   close_in ic;
-  content
+  if String.length content = 0 then raise (Empty_file file_path)
+  else content
 
-let split_and_strip (s: string) : string list =
-  s
-  |> String.trim  (* Remove leading and trailing whitespace, including newlines *)
-  |> String.split_on_char '\n'  (* Split the cleaned string into lines *)
-  |> List.filter (fun line -> line <> "")
-  |> List.map (fun line -> String.trim line)
+(** The main function to extract diffs from a list of lines. *)
+let extract_diffs lines =
+  let rec handleHunks diffs current_diff lines =
+    let rec handleHunksHelper diffs current_diff before_context after_context lines = match lines with
+      | [] -> (current_diff :: diffs)
+      | line :: rest ->
+        match line with
+        | line when (String.starts_with ~prefix: "diff" line || String.starts_with ~prefix: "From" line) ->
+          aux (current_diff :: diffs) None (line :: rest)
+        | line when String.starts_with ~prefix: "@@" line ->
+          let new_line_no = extract_line_number line in
+          if current_diff.line_no = 0 then
+            let updated_diff = {current_diff with line_no=new_line_no} in
+            handleHunksHelper diffs updated_diff before_context after_context rest
+          else
+            let new_diff = (create_diff ~file_name: current_diff.file_name ~line_no: new_line_no ()) in
+            handleHunksHelper (current_diff::diffs) new_diff before_context after_context rest
+        | line when (String.starts_with ~prefix:"+" line || String.starts_with ~prefix:"-" line) &&
+                    not (String.starts_with ~prefix:"+++" line || String.starts_with ~prefix:"---" line) ->
+          let (original_lines, remaining_after_first_pass) = span (fun l -> l <> "" && l.[0] = '-') (line :: rest) in
+          let original_lines = List.map (clean_line "-") original_lines in
+          (match original_lines with
+           | [] ->
+             let (modified_lines, remaining_after_second_pass) =
+               span (fun l -> l <> "" && l.[0] = '+') (remaining_after_first_pass) in
+             let (original_second, remaining_after_third_pass) =
+               span (fun l -> l <> "" && l.[0] = '-') (remaining_after_second_pass) in
+             let original_second = List.map (clean_line "-") original_second in
+             let modified_lines = List.map (clean_line "+") modified_lines in
+             let updated_diff = {current_diff with original_lines=original_second ;  modified_lines} in
+             handleHunksHelper diffs updated_diff before_context after_context remaining_after_third_pass
+           | _ ->
+             let (modified_lines, remaining_after_second_pass) =
+               span (fun l -> l <> "" && l.[0] = '+') (remaining_after_first_pass)
+             in
+             let modified_lines = List.map (clean_line "+") modified_lines in
+             let updated_diff = {current_diff with original_lines ;  modified_lines} in
+             handleHunksHelper diffs updated_diff before_context after_context remaining_after_second_pass)
+        | _ ->
+          if current_diff.original_lines <> [] || current_diff.modified_lines <> [] then
+            let updated_diff = {current_diff with after_context = (line :: current_diff.after_context)}
+            in
+            handleHunksHelper diffs updated_diff before_context (line :: after_context) rest
+          else
+            let updated_diff = {current_diff with before_context = (line :: current_diff.before_context)}
+            in
+            handleHunksHelper diffs updated_diff (line :: before_context) after_context rest
+    in
+    handleHunksHelper diffs current_diff [] [] lines
 
-let extract_line_number line =
-  let parts = String.split_on_char ' ' line in
-  List.find_map (fun part ->
-      if part.[0] = '+' then
-        (* Split the part on the comma and take the first element as the line number *)
-        let line_number_part = String.sub part 1 (String.length part - 1) in
-        let line_number = String.split_on_char ',' line_number_part |> List.hd in
-        try Some (int_of_string line_number)
-        with _ -> None
-      else
-        None
-    ) parts |> Option.value ~default:0
-
-
-let rec span predicate xs =
-  match xs with
-  | [] -> ([], [])
-  | x :: xs ->
-     if predicate x then
-       let (ys, zs) = span predicate xs in
-       (x :: ys, zs)
-     else
-       ([], x::xs)
-
-let rec skip predicate xs =
-  match xs with
-  | [] -> []
-  | x :: xs ->
-     if predicate x then
-       xs
-     else
-       skip predicate xs
-
-let remove_leading_char s =
-  if String.length s > 0 then
-    String.sub s 1 (String.length s - 1)
-  else
-    s
-
-let extract_diffs (lines: string list) : diff list =
-  let rec aux acc current_diff file_name line_no context = function
-    | [] -> List.rev (Option.to_list current_diff @ acc)
-    | line :: rest ->
-       if line = "" then aux acc current_diff file_name line_no context rest
-       else match line.[0] with
-            | 'F' when (String.starts_with ~prefix: "From" line) ->
-               let remaining = skip (fun l -> l = "---") rest in
-               (match current_diff with
-                 | Some d -> aux ([d] @ acc) None "" 0 [] remaining
-                 | None -> aux acc None "" 0 [] remaining)
-            | 'd' when String.length line > 4 && String.sub line 0 4 = "diff" -> (*Deleted + Added files have dev/null. Skip till next diff*)
-               let filename_with_prefix = List.rev (String.split_on_char ' ' line) |> List.hd in
-               let file_name =
-                 if String.starts_with ~prefix:"b/" filename_with_prefix then
-                   String.sub filename_with_prefix 2 (String.length filename_with_prefix - 2)
-                else
-                   filename_with_prefix
-               in
-               let new_diff  = Some {
-                                   file_name;
-                                   line_no = 0;
-                                   before_context = "";
-                                   after_context = "";
-                                   added_lines = "";
-                                   removed_lines = "";
-                                 } in
-               aux (Option.to_list current_diff @ acc) new_diff file_name 0 [] rest
-            | '@' ->
-               let new_line_no = extract_line_number line in
-               let updated_diff = match current_diff with
-                 | Some d -> Some {d with line_no=new_line_no}
-                 | None -> failwith "wtf" in (*Is there a point to optional diff ? It'll always have to be present anyway*)
-               aux acc updated_diff file_name new_line_no [] rest (*Is there actually any point to sending the line number ?*)
-            | '+' when not (String.starts_with ~prefix:"+++ " line) ->
-               let (added, remaining) = span (fun l -> l <> "" && l.[0] = '+') (line :: rest) in
-               let added_content = String.concat "\n" added in
-               let updated_diff = match current_diff with
-                 | Some d when d.file_name = file_name ->
-                    Some { d with
-                        added_lines = if d.added_lines <> "" then d.added_lines ^ "\n" ^ added_content else added_content; (*Computationally expensive*)
-                        before_context = if d.before_context <> "" then d.before_context else String.concat "\n" context ^ "\n"} (*Problem here. Multiple changes grouped together from a single diff, even if the changes are wildly different. Need to fix this. Same as the '-' match arm*)
-                 | _ ->
-                    failwith "How'd you get here?"
-               in
-               aux acc updated_diff file_name line_no [] remaining
-            | '-' when not (String.starts_with ~prefix:"--- " line) ->
-               let (removed, remaining) = span (fun l -> l <> "" && l.[0] = '-') (line :: rest) in
-               let removed_content = String.concat "\n" removed in
-               let updated_diff = match current_diff with
-                 | Some d when d.file_name = file_name ->
-                    Some { d with 
-                        removed_lines = d.removed_lines ^ removed_content;
-                        before_context = if d.before_context <> "" then d.before_context else String.concat "\n" context ^ "\n"}
-                 | _ ->
-                    failwith "How'd you get here?"
-               in
-               aux acc updated_diff file_name line_no [] remaining
-            | _ ->
-               aux acc (Option.map (fun d -> 
-                            if d.added_lines <> "" || d.removed_lines <> "" then
-                              { d with after_context = d.after_context ^ "\n" ^ line }
-                            else
-                              d
-                          ) current_diff) file_name (line_no) (context @ [line]) rest
+  and aux (diffs: diff list) (current_diff: diff option) (context: string list) =
+    let handleHeader diffs current_diff context =
+      let remaining = skip (fun l -> l = "---") context in
+      (match current_diff with
+       | Some diff -> aux (diff :: diffs) None remaining
+       | None -> aux diffs None remaining)
+    in
+    match context with
+    | [] ->
+      (match current_diff with
+       | Some d -> d :: diffs
+       | None -> diffs)
+    | line :: rest as lines ->
+      match line with
+      | "" -> aux diffs current_diff rest
+      | line when (String.starts_with ~prefix: "From" line) -> handleHeader diffs current_diff rest
+      | line when String.starts_with ~prefix: "diff" line ->
+        let file_name = extract_filename (List.hd lines) in
+        let new_diff = (create_diff ~file_name ()) in
+        let updated_diffs = match current_diff with
+          | Some d -> (d :: diffs)
+          | None -> diffs
+        in
+        handleHunks updated_diffs new_diff rest
+      | _ -> aux diffs current_diff rest
   in
-  aux [] None "" 0 [] lines
+  aux [] None lines
 
+(** Preprocesses a patch string and extracts diffs. *)
 let preprocess_patch (context: string) : diff list =
-  extract_diffs (split_and_strip context)
+  let lines = split_and_strip context in
+  extract_diffs lines

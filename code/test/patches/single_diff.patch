@@ -1,0 +1,13 @@
+From 63bdcaa2d92bf5dba4dab23abb4e2b811e565438 Mon Sep 17 00:00:00 2001
+From: Ralf Jung <post@ralfj.de>
+Date: Wed, 12 Jun 2024 15:19:40 +0200
+Subject: [PATCH 1/2] add is_none_or
+
+---
+library/core/src/option.rs | 26 ++++++++++++++++++++++++++
+1 file changed, 26 insertions(+)
+
+diff --git a/file1.txt b/file1.txt
+@@ -1,1 +1,0 @@;
+-old line;
++new line;
