@@ -1,19 +1,19 @@
 (* open Test_preprocess *)
 open Patch_processor.Diff
 open Patch_processor.Diff_reducer
-open Patch_processor.Max_valid_expression
+open Patch_processor.Min_valid_expression
 
-let max_ve_testable =
-  let pp_max_ve fmt max_ve =
+let min_ve_testable =
+  let pp_min_ve fmt min_ve =
     Format.fprintf fmt "{ file_name = %s; line_no = %d; before_context = %s; after_context = %s; original_expression = %s; modified_expression = %s }"
-      max_ve.file_name
-      max_ve.line_no
-      (String.concat "\n" (List.rev max_ve.before_context))
-      (String.concat "\n" (List.rev max_ve.after_context))
-      max_ve.original_expression
-      max_ve.modified_expression
+      min_ve.file_name
+      min_ve.line_no
+      (String.concat "\n" (List.rev min_ve.before_context))
+      (String.concat "\n" (List.rev min_ve.after_context))
+      min_ve.original_expression
+      min_ve.modified_expression
   in
-  Alcotest.testable pp_max_ve (=)
+  Alcotest.testable pp_min_ve (=)
 
 let test_diff ~file_name ~line_no ~before_context ~after_context ~original_lines ~modified_lines ~original_expression ~modified_expression expected_name =
   let diff = {
@@ -32,8 +32,8 @@ let test_diff ~file_name ~line_no ~before_context ~after_context ~original_lines
     original_expression;
     modified_expression;
   } in
-  let result = reduce_diff_to_max_expression diff in
-  Alcotest.(check max_ve_testable) expected_name expected result
+  let result = reduce_diff_to_min_expression diff in
+  Alcotest.(check min_ve_testable) expected_name expected result
 
 (* Test cases *)
 

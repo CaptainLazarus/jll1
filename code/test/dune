@@ -2,7 +2,12 @@
 (test
   (name all_tests)
   (libraries alcotest patch_processor)
-  (modules test_preprocess test_preprocess_util test_max_valid_expression all_tests)
+  (modules
+	test_preprocess
+	test_preprocess_util
+	test_max_valid_expression
+	test_min_valid_expression
+	all_tests)
   (deps (glob_files patches/*.patch))
   )
 
