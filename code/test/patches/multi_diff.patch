@@ -96,7 +96,7 @@ diff --git a/compiler/rustc_const_eval/src/interpret/projection.rs b/compiler/ru
 index 09e1a59dfa1a7..efa01b5434260 100644
 --- a/compiler/rustc_const_eval/src/interpret/projection.rs
 +++ b/compiler/rustc_const_eval/src/interpret/projection.rs
-@@ -300,7 +300,7 @@ where
+@@ -300,8 +300,8 @@ where
      ) -> InterpResult<'tcx, P> {
          let len = base.len(self)?; // also asserts that we have a type where this makes sense
          let actual_to = if from_end {
@@ -104,4 +104,6 @@ index 09e1a59dfa1a7..efa01b5434260 100644
 +            if from.checked_add(to).is_none_or(|to| to > len) {
                  // This can only be reached in ConstProp and non-rustc-MIR.
                  throw_ub!(BoundsCheckFailed { len: len, index: from.saturating_add(to) });
+-            if from.checked_add(to).map_or(true, |to| to > len) {
++            if from.checked_add(to).is_none_or(|to| to > len) {
              }

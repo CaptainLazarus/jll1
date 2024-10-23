@@ -13,7 +13,7 @@ let create_diff
       ?(after_context=[])
       ?(original_lines=[])
       ?(modified_lines=[])
-      ~file_name
+      ?(file_name="")
       ()
   = { file_name; line_no; before_context; after_context; original_lines; modified_lines }
 

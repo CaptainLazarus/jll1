@@ -96,14 +96,12 @@ let test_parse_multi_diff_extract_correct_number_of_diffs () =
   let patch_file = "./patches/multi_diff.patch" in
   let context = read_patch_file patch_file in
   let result = extract_diffs (split_and_strip context) in
-  Alcotest.(check int) "multi diff file has 4 diffs" 4 (List.length result)
+  Alcotest.(check int) "multi diff file has 4 diffs" 5 (List.length result)
 
 let test_parse_multi_diff_extracts_correct_after_context () =
   let patch_file = "./patches/multi_diff.patch" in
   let expected = [
-    "}" ;
-    "throw_ub!(BoundsCheckFailed { len: len, index: from.saturating_add(to) });";
-    "// This can only be reached in ConstProp and non-rustc-MIR."
+    "}"
     ]
   in
   let context = read_patch_file patch_file in
