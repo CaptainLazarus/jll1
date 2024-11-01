@@ -1,0 +1,12 @@
+diff --git a/compiler/rustc_const_eval/src/interpret/eval_context.rs b/compiler/rustc_const_eval/src/interpret/eval_context.rs
+index 7c2100fcbe38a..80dc23ce3039e 100644
+--- a/compiler/rustc_const_eval/src/interpret/eval_context.rs
++++ b/compiler/rustc_const_eval/src/interpret/eval_context.rs
+@@ -1057,7 +1057,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
+ 
+                 ty::Str | ty::Slice(_) | ty::Dynamic(_, _, ty::Dyn) | ty::Foreign(..) => false,
+ 
+-                ty::Tuple(tys) => tys.last().iter().all(|ty| is_very_trivially_sized(**ty)),
++                ty::Tuple(tys) => tys.last().is_none_or(|ty| is_very_trivially_sized(*ty)),
+ 
+                 ty::Pat(ty, ..) => is_very_trivially_sized(*ty),

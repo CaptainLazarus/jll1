@@ -5,6 +5,7 @@
   (modules
 	test_preprocess
 	test_preprocess_util
+        test_diff_parser_util
 	all_tests)
   (deps (glob_files patches/*.patch))
   )

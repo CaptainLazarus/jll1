@@ -1,5 +1,0 @@
-(library
-(name patch_processor)
-(public_name patch_analyser.patch_processor)
-(libraries base)
-)

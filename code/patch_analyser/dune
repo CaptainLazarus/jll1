@@ -1,0 +1,11 @@
+(library
+  (name patch_processor)
+  (public_name patch_analyser.patch_processor)  ; Same package name
+ (libraries
+   base
+   patch_analyser.tree_sitter_c
+   patch_analyser.tree_sitter_cpp
+   patch_analyser.tree_sitter_rust
+ )  ; Link to tree-sitter library
+)
+

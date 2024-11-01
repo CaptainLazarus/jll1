@@ -5,9 +5,9 @@
 (generate_opam_files true)
 
 (source
- (github username/reponame))
+ (github captainlazarus/jll1))
 
-(authors "Author Name")
+(authors "CaptainLazarus")
 
 (maintainers "CaptainLazarus")
 
@@ -17,10 +17,14 @@
 
 (package
  (name patch_analyser)
- (synopsis "A short synopsis")
- (description "A longer description")
- (depends ocaml dune (alcotest :with-test))
+ (synopsis "Patch analysis tool using OCaml and tree-sitter.")
+ (description "A patch analysis library that leverages tree-sitter for parsing and analyzing code diffs.")
+ (depends
+   ocaml
+   dune
+   base
+   atdgen-runtime
+   tree-sitter
+   (alcotest :with-test))
  (tags
-  (topics "to describe" your project)))
-
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
+  (topics "patch" "analysis" "tree-sitter" "diffs" "ocaml")))
