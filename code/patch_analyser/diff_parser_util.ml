@@ -36,6 +36,7 @@ let rec drop n lst =
   | _ :: tail when n > 0 -> drop (n - 1) tail  (* Skip the head and decrement n *)
   | l :: _ -> l  (* If n is zero or negative, return the remaining list *)
 
+(* TODO: Range of lines contains removed identifiers or parameters or stuff -> Check *)
 let get_identifier code node_kind start_pos end_pos =
   if (start_pos.row = end_pos.row && node_kind = "identifier") then
     let line = drop start_pos.row (String.split_on_char '\n' code) in

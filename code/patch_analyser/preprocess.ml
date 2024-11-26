@@ -27,46 +27,52 @@ let read_patch_file (file_path: string) : string =
 (** The main function to extract diffs from a list of lines. *)
 let extract_diffs lines =
   let rec handleHunks diffs current_diff lines =
-    let rec handleHunksHelper diffs current_diff context = function
+    let rec handleHunksHelper curr_line_no diffs current_diff context lines =
+      let handle_new_hunk curr_line_no diffs current_diff context lines =
+        let line,rest = (List.hd lines), (List.tl lines) in
+        let new_line_no = extract_line_number line in
+        let context =
+          if context <> [] && String.sub (List.hd context) 0 3 = "+++" then [] else context
+        in
+        if not_empty current_diff then
+          let new_diff = (create_diff ~file_name: current_diff.file_name ~line_no: new_line_no ()) in
+          handleHunksHelper (curr_line_no+1) (append diffs (add_context current_diff context)) new_diff context rest
+        else
+          let updated_diff = {current_diff with line_no=new_line_no} in
+          handleHunksHelper (curr_line_no+1) diffs updated_diff context rest
+      in
+      let handle_changes curr_line_no diffs current_diff context lines =
+        let (original_lines, remaining_lines) =
+          span (fun l -> l <> "" && l.[0] = '-') lines
+        in
+        let (modified_lines, remaining_context) =
+          span (fun l -> l <> "" && l.[0] = '+') (remaining_lines)
+        in
+        let original_lines = List.map (clean_line "-") original_lines in
+        let modified_lines = List.map (clean_line "+") modified_lines in
+        if not_empty current_diff then
+          let updated_diff = (add_context current_diff context) in
+          let new_diff = {current_diff with original_lines ; modified_lines; before_context=context} in
+          handleHunksHelper curr_line_no (append diffs updated_diff) new_diff [] remaining_context
+        else
+          let updated_diff = {current_diff with original_lines ; modified_lines; before_context=context} in
+          handleHunksHelper curr_line_no diffs updated_diff [] remaining_context
+      in
+      match lines with
       | [] -> append diffs (add_context current_diff context)
       | line :: rest ->
-        match line with
-        | line when (String.starts_with ~prefix: "diff" line || String.starts_with ~prefix: "From" line) ->
-          aux (append diffs (add_context current_diff context)) empty_diff (line :: rest)
-        | line when String.starts_with ~prefix: "@@" line -> (*Can have multiple @@ under a single diff*)
-          let new_line_no = extract_line_number line in
-          let context =
-            if context <> [] && String.sub (List.hd context) 0 3 = "+++" then
-              []
-            else context
-          in
-          if not_empty current_diff then
-            let new_diff = (create_diff ~file_name: current_diff.file_name ~line_no: new_line_no ()) in
-            handleHunksHelper (append diffs (add_context current_diff context)) new_diff context rest
-          else
-            let updated_diff = {current_diff with line_no=new_line_no} in
-            handleHunksHelper diffs updated_diff context rest
-        | line when (String.starts_with ~prefix:"+" line || String.starts_with ~prefix:"-" line) &&
-                    not (String.starts_with ~prefix:"+++" line || String.starts_with ~prefix:"---" line) ->
-          let (original_lines, remaining_lines) =
-            span (fun l -> l <> "" && l.[0] = '-') (line :: rest)
-          in
-          let (modified_lines, remaining_context) =
-            span (fun l -> l <> "" && l.[0] = '+') (remaining_lines)
-          in
-          let original_lines = List.map (clean_line "-") original_lines in
-          let modified_lines = List.map (clean_line "+") modified_lines in
-          if not_empty current_diff then
-            let updated_diff = (add_context current_diff context) in
-            let new_diff = {current_diff with original_lines ; modified_lines; before_context=context} in
-            handleHunksHelper (append diffs updated_diff) new_diff [] remaining_context
-          else
-            let updated_diff = {current_diff with original_lines ; modified_lines; before_context=context} in
-            handleHunksHelper diffs updated_diff [] remaining_context
-        | _ ->
-          handleHunksHelper diffs current_diff (line::context) rest
+         match line with
+         | line when (String.starts_with ~prefix: "diff" line || String.starts_with ~prefix: "From" line) ->
+            aux (append diffs (add_context current_diff context)) empty_diff (line :: rest)
+         | line when String.starts_with ~prefix: "@@" line -> (*Can have multiple @@ under a single diff. Also, line_no is completely pointless. Point to original file. We don't need the original file. But start counter from 0 here.*)
+            handle_new_hunk curr_line_no diffs current_diff context (line::rest)
+         | line when (String.starts_with ~prefix:"+" line || String.starts_with ~prefix:"-" line) &&
+                       not (String.starts_with ~prefix:"+++" line || String.starts_with ~prefix:"---" line) ->
+            handle_changes curr_line_no diffs current_diff context (line::rest)
+         | _ ->
+            handleHunksHelper (curr_line_no+1) diffs current_diff (line::context) rest
     in
-    handleHunksHelper diffs current_diff [] lines
+    handleHunksHelper 0 diffs current_diff [] lines
 
   and aux (diffs: diff list) (current_diff: diff) (context: string list) =
     let handleHeader diffs current_diff context =
@@ -77,22 +83,22 @@ let extract_diffs lines =
     in
     match context with
     | [] ->
-      (match current_diff with
-       | d when (not_empty d) -> d :: diffs
-       | _ -> diffs)
+       (match current_diff with
+        | d when (not_empty d) -> d :: diffs
+        | _ -> diffs)
     | line :: rest as lines ->
-      match line with
-      | "" -> aux diffs current_diff rest
-      | line when (String.starts_with ~prefix: "From" line) -> handleHeader diffs current_diff rest
-      | line when String.starts_with ~prefix: "diff" line ->
-        let file_name = extract_filename (List.hd lines) in
-        if not_empty current_diff then
-          let new_diff = create_diff ~file_name () in
-          handleHunks (current_diff :: diffs) new_diff rest
-        else
-          let updated_diff = {current_diff with file_name} in
-          handleHunks diffs updated_diff rest
-      | _ -> aux diffs current_diff rest
+       match line with
+       | "" -> aux diffs current_diff rest
+       | line when (String.starts_with ~prefix: "From" line) -> handleHeader diffs current_diff rest
+       | line when String.starts_with ~prefix: "diff" line ->
+          let file_name = extract_filename (List.hd lines) in
+          if not_empty current_diff then
+            let new_diff = create_diff ~file_name () in
+            handleHunks (current_diff :: diffs) new_diff rest
+          else
+            let updated_diff = {current_diff with file_name} in
+            handleHunks diffs updated_diff rest
+       | _ -> aux diffs current_diff rest
   in
   aux [] empty_diff lines
 

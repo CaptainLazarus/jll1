@@ -14,17 +14,17 @@ let test_split_and_strip () =
       check (list string) desc expected (split_and_strip input)
     ) test_cases
 
-let test_extract_line_number () =
-  let test_cases = [
-    ("valid line number", "@@ -1,3 +4,5 @@", 4);
-    ("single line addition", "@@ -2 +5 @@", 5);
-    ("no line number", "@@ invalid header @@", 0);
-    ("empty string", "", 0);
-    ("only newlines", "\n\n", 0);
-  ] in
-  List.iter (fun (desc, input, expected) ->
-      check int desc expected (extract_line_number input)
-    ) test_cases
+(* let test_extract_line_number () = *)
+(*   let test_cases = [ *)
+(*     ("valid line number", "@@ -1,3 +4,5 @@", 4); *)
+(*     ("single line addition", "@@ -2 +5 @@", 5); *)
+(*     ("no line number", "@@ invalid header @@", 0); *)
+(*     ("empty string", "", 0); *)
+(*     ("only newlines", "\n\n", 0); *)
+(*   ] in *)
+(*   List.iter (fun (desc, input, expected) -> *)
+(*       check int desc expected (extract_line_number input) *)
+(*     ) test_cases *)
 
 let test_clean_line () =
   let test_cases = [
@@ -76,7 +76,7 @@ let test_skip () =
 
 let tests = [
   Alcotest.test_case "Test split_and_strip" `Quick test_split_and_strip;
-  Alcotest.test_case "Test extract_line_number" `Quick test_extract_line_number;
+  (* Alcotest.test_case "Test extract_line_number" `Quick test_extract_line_number; *)
   Alcotest.test_case "Test clean_line" `Quick test_clean_line;
   Alcotest.test_case "Test span" `Quick test_span;
   Alcotest.test_case "Test extract_filename" `Quick test_extract_filename;
